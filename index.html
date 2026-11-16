@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bhirty</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a6b8a">
+<meta name="application-name" content="Bhirty">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bhirty">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Mise en page : carte satellite à gauche (en haut sur téléphone), résultats par terrain à droite. */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --ink:#13241f; --muted:#5a6b65; --line:#d5dedb;
+  --water:#0a6b8a; --water-soft:#d9eef4; --good:#2f7d4f; --warn:#b7791f; --bad:#b4432f;
+  --font-head:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+  --font-body:"Inter","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1815; --surface:#17231f; --ink:#e6efeb; --muted:#9bb0a8; --line:#2a3a35;
+    --water:#5cc2de; --water-soft:#12333d; --good:#6cc48d; --warn:#e0b25a; --bad:#e8836f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1815; --surface:#17231f; --ink:#e6efeb; --muted:#9bb0a8; --line:#2a3a35;
+  --water:#5cc2de; --water-soft:#12333d; --good:#6cc48d; --warn:#e0b25a; --bad:#e8836f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-body)}
+header{padding:12px max(16px,env(safe-area-inset-left,0px)) 10px max(16px,env(safe-area-inset-right,0px));display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--surface)}
+header h1{margin:0;font:700 20px var(--font-head);letter-spacing:.01em}
+header span{color:var(--muted);font-size:13px}
+.app{display:grid;grid-template-columns:minmax(0,1fr)}
+#mapwrap{position:relative}
+#map{height:46vh;min-height:300px;background:var(--line)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-left,0px)) 10px max(16px,env(safe-area-inset-right,0px));background:var(--surface);border-bottom:1px solid var(--line)}
+.tools input[type=text]{flex:1 1 180px;min-width:0}
+input,select,textarea,button{font:inherit;color:var(--ink)}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+button{background:var(--water);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--water);border:1px solid var(--water)}
+button.small{padding:4px 8px;font-size:13px}
+:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+main{display:grid;gap:12px;padding:12px max(16px,env(safe-area-inset-left,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-right,0px));min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
+.card h2{margin:0 0 8px;font:700 16px var(--font-head)}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin:0}
+.kv div{min-width:0}
+.kv dt{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kv dd{margin:0;font-variant-numeric:tabular-nums;font-weight:500}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+.g{background:var(--good)}.w{background:var(--warn)}.b{background:var(--bad)}.wa{background:var(--water)}
+.big{font:700 28px var(--font-head);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted);font-size:13px}
+.note{background:var(--water-soft);border-radius:6px;padding:8px 10px;font-size:13px;margin-top:10px}
+.crop{padding:10px 0;border-top:1px solid var(--line)}
+.crop:first-of-type{border-top:0}
+.crop-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.crop-head b{font-family:var(--font-head)}
+.score{font-variant-numeric:tabular-nums;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.grid2 label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
+.list{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.list li{display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+.list li span{min-width:0;overflow-wrap:anywhere}
+textarea{width:100%;min-height:90px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#status{font-size:13px;color:var(--muted);min-height:20px}
+.err{color:var(--bad)}
+@media (min-width:900px){
+  .app{grid-template-columns:minmax(0,1.15fr) minmax(380px,.85fr);height:calc(100vh - 53px)}
+  #left{display:flex;flex-direction:column;min-height:0}
+  #mapwrap{flex:1;min-height:0}
+  #map{height:100%}
+  main{overflow:auto;align-content:start}
+}
+</style>
+</head>
+<body>
+<header><h1>Bhirty</h1><span>بحيرتي · eau et terres · zone de 100 km autour de Djelfa</span></header>
+<div class="app">
+  <div id="left">
+    <div class="tools">
+      <input id="coord" type="text" inputmode="decimal" placeholder="Coordonnées : 34.67, 3.26" aria-label="Coordonnées du terrain">
+      <button id="go">Analyser</button>
+      <button id="loc" class="ghost">Ma position</button>
+      <button id="recentre" class="ghost" title="Déplacer le cercle de 100 km sur le point choisi">Centrer la zone ici</button>
+    </div>
+    <div id="mapwrap"><div id="map" aria-label="Carte satellite"></div></div>
+  </div>
+  <main>
+    <div id="status">Touchez la carte pour choisir un terrain.</div>
+    <section class="card" id="c-terrain"></section>
+    <section class="card" id="c-eau"></section>
+    <section class="card" id="c-climat"></section>
+    <section class="card" id="c-sol"></section>
+    <section class="card" id="c-arbres"></section>
+    <section class="card" id="c-forages"></section>
+    <p class="muted">Estimations indicatives à partir de données ouvertes (Open-Meteo, SoilGrids, imagerie Esri). Elles ne remplacent ni une analyse de sol et d'eau en laboratoire, ni un sondage électrique, ni l'avis d'un hydrogéologue ou d'un agronome avant tout forage ou plantation.</p>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+//#LOGIC-START
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+function hav(a,b,c,d){const R=6371,r=Math.PI/180,dl=(c-a)*r,dn=(d-b)*r;
+  const h=Math.sin(dl/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+function off(lat,lon,dn,de){return [lat+dn/111320, lon+de/(111320*Math.cos(lat*Math.PI/180))];}
+
+/* Espèces : seuils agronomiques généraux (indicatifs).
+   tcrit = température minimale d'hiver (°C) en dessous de laquelle le bois ou les bourgeons souffrent
+   spring = jours de gel (mars-avril) tolérés par an ; chill = jours froids (T moyenne < 7 °C) nécessaires
+   hot = jours > 38 °C tolérés ; need = besoin en eau annuel (mm) ; ecTol = salinité du sol tolérée (dS/m) */
+const CROPS=[
+ {nom:'Pistachier',tcrit:-15,spring:4,chill:90,hot:70,need:700,ph:[7,8.5],ecTol:6,clayMax:40},
+ {nom:'Olivier',tcrit:-8,spring:10,chill:40,hot:40,need:600,ph:[6.5,8.5],ecTol:4,clayMax:45},
+ {nom:'Grenadier',tcrit:-10,spring:8,chill:20,hot:70,need:800,ph:[5.5,8.5],ecTol:5,clayMax:40},
+ {nom:'Figuier',tcrit:-9,spring:10,chill:10,hot:60,need:700,ph:[6,8.5],ecTol:4,clayMax:40},
+ {nom:'Vigne',tcrit:-15,spring:4,chill:30,hot:40,need:500,ph:[6,8.5],ecTol:2.5,clayMax:40},
+ {nom:'Amandier',tcrit:-15,spring:1.5,chill:40,hot:45,need:800,ph:[6.5,8],ecTol:1.5,clayMax:35},
+ {nom:'Abricotier',tcrit:-18,spring:2,chill:70,hot:20,need:900,ph:[6.5,8],ecTol:1.6,clayMax:35},
+ {nom:'Pommier',tcrit:-25,spring:4,chill:100,hot:5,need:1000,ph:[6,7.5],ecTol:1.7,clayMax:40}
+];
+
+function waterModel(t,c,bores,lat,lon){
+  const tpi=t?t.tpi:0, slope=t?t.slope:5, precip=c?c.precip:200;
+  const conc=clamp(0.5-tpi/60), flat=1-clamp(slope/15), rain=clamp(precip/400);
+  let pot=0.45*conc+0.25*flat+0.30*rain;
+  const ok=[],dry=[];
+  for(const b of bores){const d=hav(lat,lon,b.lat,b.lon);
+    if(b.debit===0)dry.push({...b,d}); else if(b.prof>0)ok.push({...b,d});}
+  const nearOk=ok.filter(b=>b.d<=5).length, nearDry=dry.filter(b=>b.d<=5).length;
+  if(nearOk)pot=Math.max(pot,0.6);
+  if(nearDry&&!nearOk)pot*=0.7;
+  let depth,lo,hi,conf;
+  if(ok.length){
+    let sw=0,s=0;ok.forEach(b=>{const w=1/Math.max(b.d,0.5)**2;sw+=w;s+=w*b.prof;});
+    depth=s/sw;const near=Math.min(...ok.map(b=>b.d));
+    const spread=ok.length>1?Math.sqrt(mean(ok.map(b=>(b.prof-depth)**2))):0;
+    const rel=Math.max(0.15,Math.min(0.6,near/40)); // marge relative selon la distance au forage le plus proche
+    const m=Math.max(spread,depth*rel);lo=Math.max(1,depth-m);hi=depth+m;
+    conf=(ok.length>=3&&near<10)?'Moyenne':(near<5?'Moyenne':'Faible');
+  }else{
+    depth=clamp(90+1.2*tpi,20,250);lo=depth*0.5;hi=depth*1.6;conf='Très faible';
+  }
+  const label=pot<0.35?'Faible':pot<0.6?'Moyen':'Bon';
+  return {pot,label,depth,lo,hi,conf,nOk:ok.length,nearOk,nearDry,conc,flat,rain};
+}
+
+const F={ // libellés des facteurs
+ winter:'gel hivernal',spring:'gel de printemps',chill:'manque de froid (dormance)',hot:'chaleur estivale',
+ water:'eau disponible',ph:'pH du sol',tex:'texture du sol',ec:'salinité du sol',ecw:"salinité de l'eau",slope:'pente'
+};
+function tol(v,t,k){return v<=t?1:1-clamp((v-t)/(t*k));}
+function scoreCrops(I){
+  return CROPS.map(cr=>{
+    const f={};
+    if(I.tminWorst!=null)f.winter=clamp((I.tminWorst-cr.tcrit)/5);
+    if(I.spring!=null)f.spring=I.spring<=cr.spring?1:1-clamp((I.spring-cr.spring)/(cr.spring*2));
+    if(I.chill!=null)f.chill=clamp(I.chill/cr.chill);
+    if(I.hot!=null)f.hot=I.hot<=cr.hot?1:1-clamp((I.hot-cr.hot)/cr.hot);
+    if(I.precip!=null){
+      // irrigation supposée : au plus ~500 mm/an, réduite si l'eau est profonde ou non confirmée par un forage
+      const acc=clamp(I.waterPot)*(I.depth>150?0.6:I.depth>80?0.8:1)*(I.confirmed?1:0.6);
+      f.water=clamp((I.precip+acc*500)/cr.need);
+    }
+    if(I.ph!=null)f.ph=1-clamp((cr.ph[0]-I.ph>0?cr.ph[0]-I.ph:I.ph>cr.ph[1]?I.ph-cr.ph[1]:0)/3);
+    if(I.clay!=null&&I.sand!=null)f.tex=Math.min(1-clamp((I.clay-cr.clayMax)/25),1-clamp((I.sand-85)/10));
+    f.ec=tol(I.ec,cr.ecTol,1.5);
+    f.ecw=tol(I.ecw,cr.ecTol/1.5,1.5);
+    if(I.slope!=null)f.slope=I.slope<=8?1:1-0.8*clamp((I.slope-8)/17);
+    const vals=Object.values(f);
+    const sc=100*(0.4*mean(vals)+0.6*Math.min(...vals));
+    const lim=Object.entries(f).filter(([,v])=>v<0.6).sort((a,b)=>a[1]-b[1]).slice(0,3).map(([k])=>F[k]);
+    const verdict=sc>=75?'Très adapté':sc>=55?'Adapté, sous conditions':sc>=35?'Limite':'Peu adapté';
+    return {nom:cr.nom,sc,verdict,lim};
+  }).sort((a,b)=>b.sc-a.sc);
+}
+//#LOGIC-END
+
+/* ---------- Données ouvertes ---------- */
+async function getJSON(url,ms=15000){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+  try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}
+  finally{clearTimeout(t);}
+}
+async function fetchTerrain(lat,lon){
+  const D=250,pts=[[lat,lon],off(lat,lon,D,0),off(lat,lon,0,D),off(lat,lon,-D,0),off(lat,lon,0,-D)];
+  for(const r of [500,2000])for(let k=0;k<8;k++){const a=k*Math.PI/4;pts.push(off(lat,lon,r*Math.cos(a),r*Math.sin(a)));}
+  const url='https://api.open-meteo.com/v1/elevation?latitude='+pts.map(p=>p[0].toFixed(5)).join(',')+'&longitude='+pts.map(p=>p[1].toFixed(5)).join(',');
+  const e=(await getJSON(url)).elevation;
+  const dzdy=(e[1]-e[3])/(2*D),dzdx=(e[2]-e[4])/(2*D);
+  return {z:e[0],slope:100*Math.hypot(dzdx,dzdy),aspect:(Math.atan2(-dzdx,-dzdy)*180/Math.PI+360)%360,
+          tpi:e[0]-(mean(e.slice(5,13))+mean(e.slice(13,21)))/2};
+}
+const climCache={};
+async function fetchClimate(lat,lon){
+  const key=lat.toFixed(1)+','+lon.toFixed(1);if(climCache[key])return climCache[key];
+  const url=`https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&start_date=2015-01-01&end_date=2024-12-31&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum&timezone=Africa%2FAlgiers`;
+  const d=(await getJSON(url,30000)).daily,Y={};
+  d.time.forEach((t,i)=>{
+    const y=t.slice(0,4),m=+t.slice(5,7),tx=d.temperature_2m_max[i],tn=d.temperature_2m_min[i],tm=d.temperature_2m_mean[i];
+    if(tx==null||tn==null)return;
+    const o=Y[y]||(Y[y]={p:0,tmin:99,spring:0,frost:0,chill:0,hot:0,n:0});
+    o.n++;o.p+=d.precipitation_sum[i]||0;o.tmin=Math.min(o.tmin,tn);
+    if(tn<0){o.frost++;if(m===3||m===4)o.spring++;}
+    if(tm!=null&&tm<7)o.chill++;
+    if(tx>=38)o.hot++;
+  });
+  const ys=Object.values(Y).filter(o=>o.n>300);
+  if(!ys.length)throw new Error('données vides');
+  const r={precip:mean(ys.map(o=>o.p)),tminWorst:Math.min(...ys.map(o=>o.tmin)),frost:mean(ys.map(o=>o.frost)),
+           spring:mean(ys.map(o=>o.spring)),chill:mean(ys.map(o=>o.chill)),hot:mean(ys.map(o=>o.hot)),years:ys.length};
+  climCache[key]=r;return r;
+}
+async function fetchSoil(lat,lon){
+  const url=`https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon.toFixed(4)}&lat=${lat.toFixed(4)}&property=phh2o&property=clay&property=sand&depth=0-5cm&depth=5-15cm&depth=15-30cm&value=mean`;
+  const L=(await getJSON(url,12000)).properties.layers,out={};
+  for(const l of L){
+    const df=(l.unit_measure&&l.unit_measure.d_factor)||10;
+    const v=l.depths.map(d=>d.values.mean).filter(x=>x!=null);
+    if(v.length)out[l.name]=mean(v)/df;
+  }
+  if(out.phh2o==null)throw new Error('sol indisponible');
+  return {ph:out.phh2o,clay:out.clay,sand:out.sand};
+}
+
+/* ---------- État et carte ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(x,d=0)=>(x==null||isNaN(x))?'—':Number(x).toLocaleString('fr-FR',{maximumFractionDigits:d,minimumFractionDigits:d});
+const ZONE={lat:34.6728,lon:3.2630,km:100}; // Djelfa
+const S={pt:null,terrain:null,climate:null,soil:null,errors:[],busy:false};
+let bores=[];try{bores=JSON.parse(localStorage.getItem('forages')||'[]')}catch(e){}
+const saveBores=()=>{try{localStorage.setItem('forages',JSON.stringify(bores))}catch(e){}};
+
+const map=L.map('map').setView([ZONE.lat,ZONE.lon],9);
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Imagerie © Esri'}).addTo(map);
+const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+L.control.layers({'Satellite':sat,'Plan':osm}).addTo(map);
+// Si le satellite ne charge pas (aperçu bloqué, réseau coupé), bascule sur le plan et prévient.
+let satOk=false,satErr=0;
+sat.on('tileload',()=>{satOk=true;});
+sat.on('tileerror',()=>{
+  satErr++;
+  if(!satOk&&satErr>=4&&map.hasLayer(sat)){
+    map.removeLayer(sat);osm.addTo(map);
+    $('#status').innerHTML='<span class="err">Le satellite ne charge pas : ouvrez le fichier directement dans Chrome (pas dans l\'aperçu) avec internet. Le plan routier est affiché à la place.</span>';
+  }
+});
+const zone=L.circle([ZONE.lat,ZONE.lon],{radius:ZONE.km*1000,color:'#0a6b8a',weight:2,fill:false,dashArray:'6 6'}).addTo(map);
+const marker=L.marker([ZONE.lat,ZONE.lon]).addTo(map);
+const boreLayer=L.layerGroup().addTo(map);
+map.on('click',e=>analyse(e.latlng.lat,e.latlng.lng));
+
+function drawBores(){
+  boreLayer.clearLayers();
+  bores.forEach(b=>L.circleMarker([b.lat,b.lon],{radius:6,color:'#fff',weight:2,fillColor:b.debit===0?'#b4432f':'#0a6b8a',fillOpacity:1,bubblingMouseEvents:false})
+    .bindTooltip(`${esc(b.nom||'Forage')} · ${b.debit===0?'sec':fmt(b.prof)+' m'}`).addTo(boreLayer));
+}
+
+async function analyse(lat,lon){
+  if(S.busy)return;S.busy=true;
+  S.pt={lat,lon};marker.setLatLng([lat,lon]);
+  $('#coord').value=lat.toFixed(5)+', '+lon.toFixed(5);
+  const out=hav(ZONE.lat,ZONE.lon,lat,lon);
+  $('#status').innerHTML='Analyse en cours…'+(out>ZONE.km?` <span class="err">Ce point est à ${fmt(out)} km du centre de la zone.</span>`:'');
+  S.errors=[];
+  const [t,c,s]=await Promise.allSettled([fetchTerrain(lat,lon),fetchClimate(lat,lon),fetchSoil(lat,lon)]);
+  S.terrain=t.status==='fulfilled'?t.value:null;
+  S.climate=c.status==='fulfilled'?c.value:null;
+  S.soil=s.status==='fulfilled'?s.value:null;
+  if(!S.terrain)S.errors.push('Altitude et pente indisponibles');
+  if(!S.climate)S.errors.push('Climat indisponible');
+  if(!S.soil)S.errors.push('Sol (SoilGrids) indisponible : saisissez pH, argile et sable à la main');
+  S.busy=false;
+  $('#status').innerHTML=(S.errors.length?`<span class="err">${S.errors.join(' · ')}</span>`:'Analyse terminée.')+(out>ZONE.km?` <span class="err">Point hors de la zone de ${ZONE.km} km.</span>`:'');
+  render();
+}
+
+/* ---------- Affichage ---------- */
+const compass=a=>['N','NE','E','SE','S','SO','O','NO'][Math.round(a/45)%8];
+const cls=v=>v>=0.7?'g':v>=0.4?'w':'b';
+const val=id=>{const v=parseFloat(($('#'+id)||{}).value);return isNaN(v)?null:v;};
+
+function soilInputs(){
+  const a=S.soil||{};
+  return {ph:val('m-ph')??a.ph??null,clay:val('m-clay')??a.clay??null,sand:val('m-sand')??a.sand??null,
+          ec:val('m-ec')??2,ecw:val('m-ecw')??1.5};
+}
+
+function render(){
+  const t=S.terrain,c=S.climate,pt=S.pt;if(!pt)return;
+  // Terrain
+  const pos=t?(t.tpi<-8?'Cuvette ou bas-fond : l\'eau de pluie s\'y accumule':t.tpi>8?'Point haut ou crête : l\'eau s\'écoule':'Terrain plat ou versant'):'—';
+  $('#c-terrain').innerHTML=`<h2>Terrain</h2><dl class="kv">
+    <div><dt>Altitude</dt><dd>${t?fmt(t.z)+' m':'—'}</dd></div>
+    <div><dt>Pente</dt><dd>${t?fmt(t.slope,1)+' %':'—'}</dd></div>
+    <div><dt>Exposition</dt><dd>${t?(t.slope<1.5?'plat':compass(t.aspect)):'—'}</dd></div>
+    <div><dt>Position</dt><dd>${esc(pos)}</dd></div></dl>`;
+  // Eau
+  const w=waterModel(t,c,bores,pt.lat,pt.lon);S.water=w;
+  $('#c-eau').innerHTML=`<h2>Eau souterraine</h2>
+    <div class="big">${w.label}</div>
+    <div class="bar" style="margin:6px 0 10px"><i class="wa" style="width:${Math.round(w.pot*100)}%"></i></div>
+    <dl class="kv">
+      <div><dt>Profondeur estimée</dt><dd>${fmt(w.lo)} à ${fmt(w.hi)} m</dd></div>
+      <div><dt>Fiabilité</dt><dd>${w.conf}</dd></div>
+      <div><dt>Forages productifs utilisés</dt><dd>${w.nOk}</dd></div>
+      <div><dt>À moins de 5 km</dt><dd>${w.nearOk} productif(s), ${w.nearDry} sec(s)</dd></div></dl>
+    <div class="note">${w.nOk?'La profondeur est interpolée à partir de vos forages (plus un forage est proche, plus il pèse).':'Aucun forage saisi : la profondeur est un ordre de grandeur issu du relief seulement. Ajoutez les forages voisins plus bas pour l\'améliorer.'}
+      Le niveau de l'eau se confirme par sondage électrique puis forage.</div>`;
+  // Climat
+  $('#c-climat').innerHTML=`<h2>Climat ${c?'(moyenne '+c.years+' ans)':''}</h2><dl class="kv">
+    <div><dt>Pluie annuelle</dt><dd>${c?fmt(c.precip)+' mm':'—'}</dd></div>
+    <div><dt>Hiver le plus froid</dt><dd>${c?fmt(c.tminWorst,1)+' °C':'—'}</dd></div>
+    <div><dt>Jours de gel / an</dt><dd>${c?fmt(c.frost,1):'—'}</dd></div>
+    <div><dt>Gel en mars-avril</dt><dd>${c?fmt(c.spring,1)+' j':'—'}</dd></div>
+    <div><dt>Jours froids (&lt; 7 °C)</dt><dd>${c?fmt(c.chill):'—'}</dd></div>
+    <div><dt>Jours &gt; 38 °C</dt><dd>${c?fmt(c.hot,1):'—'}</dd></div></dl>`;
+  // Sol (garde les valeurs saisies à la main entre deux analyses)
+  const keep={};['m-ph','m-clay','m-sand','m-ec','m-ecw'].forEach(id=>{const e=$('#'+id);if(e)keep[id]=e.value;});
+  const a=S.soil||{};
+  $('#c-sol').innerHTML=`<h2>Sol et eau d'irrigation</h2>
+    <p class="muted" style="margin:0 0 8px">${S.soil?'Valeurs estimées par SoilGrids (0 à 30 cm, résolution 250 m). Corrigez-les avec vos analyses.':'Estimation indisponible : saisissez vos valeurs.'}</p>
+    <div class="grid2">
+      <label>pH<input id="m-ph" type="number" step="0.1" placeholder="${a.ph!=null?fmt(a.ph,1):'ex. 7.8'}"></label>
+      <label>Argile (%)<input id="m-clay" type="number" step="1" placeholder="${a.clay!=null?fmt(a.clay):'ex. 25'}"></label>
+      <label>Sable (%)<input id="m-sand" type="number" step="1" placeholder="${a.sand!=null?fmt(a.sand):'ex. 40'}"></label>
+      <label>Salinité du sol (dS/m)<input id="m-ec" type="number" step="0.1" placeholder="non mesurée (2 supposé)"></label>
+      <label>Salinité de l'eau (dS/m)<input id="m-ecw" type="number" step="0.1" placeholder="non mesurée (1,5 supposé)"></label>
+    </div>`;
+  Object.entries(keep).forEach(([id,v])=>{const e=$('#'+id);if(e)e.value=v;});
+  ['m-ph','m-clay','m-sand','m-ec','m-ecw'].forEach(id=>$('#'+id).addEventListener('input',renderCrops));
+  renderCrops();renderBores();
+}
+
+function renderCrops(){
+  const t=S.terrain,c=S.climate;if(!S.pt)return;
+  const so=soilInputs(),w=S.water;
+  const res=scoreCrops({slope:t?t.slope:null,tminWorst:c?c.tminWorst:null,spring:c?c.spring:null,chill:c?c.chill:null,
+    hot:c?c.hot:null,precip:c?c.precip:null,waterPot:w.pot,depth:w.depth,confirmed:w.nOk>0,ph:so.ph,clay:so.clay,sand:so.sand,ec:so.ec,ecw:so.ecw});
+  $('#c-arbres').innerHTML=`<h2>Arbres fruitiers</h2>`+res.map(r=>`<div class="crop">
+    <div class="crop-head"><b>${r.nom}</b><span class="score">${Math.round(r.sc)} / 100 · ${r.verdict}</span></div>
+    <div class="bar"><i class="${cls(r.sc/100)}" style="width:${Math.round(r.sc)}%"></i></div>
+    ${r.lim.length?`<div class="muted" style="margin-top:4px">À surveiller : ${r.lim.join(', ')}</div>`:''}</div>`).join('')
+    +`<div class="note">Score indicatif calculé avec des seuils agronomiques généraux. Les variétés, le porte-greffe et la conduite de l'irrigation changent le résultat : demandez conseil à un ingénieur agronome ou à l'ITAFV.</div>`;
+}
+
+function renderBores(){
+  const pt=S.pt;
+  $('#c-forages').innerHTML=`<h2>Forages connus</h2>
+    <p class="muted" style="margin:0 0 8px">Ajoutez les forages ou puits voisins (profondeur de l'eau, débit). Débit 0 = forage sec. Ils sont enregistrés sur cet appareil.</p>
+    <div class="grid2">
+      <label>Nom<input id="b-nom" type="text" placeholder="Forage ferme X"></label>
+      <label>Profondeur de l'eau (m)<input id="b-prof" type="number" min="0" step="1"></label>
+      <label>Débit (L/s)<input id="b-deb" type="number" min="0" step="0.1" placeholder="facultatif"></label>
+      <label>Position<input type="text" value="${pt?pt.lat.toFixed(5)+', '+pt.lon.toFixed(5):''}" id="b-pos"></label>
+    </div>
+    <div class="row"><button id="b-add" class="small">Ajouter ce forage</button></div>
+    <ul class="list">${bores.map((b,i)=>`<li><span>${esc(b.nom||'Forage')} · ${b.debit===0?'sec':fmt(b.prof)+' m'}${b.debit>0?' · '+fmt(b.debit,1)+' L/s':''}<br><span class="muted">${b.lat.toFixed(4)}, ${b.lon.toFixed(4)}${pt?' · '+fmt(hav(pt.lat,pt.lon,b.lat,b.lon),1)+' km':''}</span></span><button class="ghost small" data-del="${i}">Supprimer</button></li>`).join('')||'<li class="muted">Aucun forage saisi.</li>'}</ul>
+    <div class="row"><button id="b-exp" class="ghost small">Exporter (CSV)</button><button id="b-imp" class="ghost small">Importer (CSV)</button></div>
+    <textarea id="b-csv" placeholder="nom,lat,lon,profondeur_m,debit_ls" aria-label="Forages au format CSV"></textarea>`;
+  $('#b-add').onclick=()=>{
+    const m=$('#b-pos').value.match(/(-?\d+(?:[.,]\d+)?)\s*[,; ]\s*(-?\d+(?:[.,]\d+)?)/);
+    const prof=parseFloat($('#b-prof').value),deb=$('#b-deb').value===''?null:parseFloat($('#b-deb').value);
+    if(!m||(deb!==0&&!(prof>0))){$('#status').innerHTML='<span class="err">Indiquez une position et une profondeur (ou un débit de 0 pour un forage sec).</span>';return;}
+    bores.push({nom:$('#b-nom').value.trim(),lat:parseFloat(m[1].replace(',','.')),lon:parseFloat(m[2].replace(',','.')),prof:prof>0?prof:0,debit:deb});
+    saveBores();drawBores();render();
+  };
+  $('#c-forages').querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{bores.splice(+btn.dataset.del,1);saveBores();drawBores();render();});
+  $('#b-exp').onclick=()=>{$('#b-csv').value='nom,lat,lon,profondeur_m,debit_ls\n'+bores.map(b=>[(b.nom||'').replace(/,/g,' '),b.lat,b.lon,b.prof,b.debit==null?'':b.debit].join(',')).join('\n');};
+  $('#b-imp').onclick=()=>{
+    let n=0;$('#b-csv').value.split(/\r?\n/).forEach(line=>{
+      const p=line.split(',');const lat=parseFloat(p[1]),lon=parseFloat(p[2]);if(isNaN(lat)||isNaN(lon))return;
+      const prof=parseFloat(p[3]),deb=(p[4]===undefined||p[4].trim()==='')?null:parseFloat(p[4]);
+      if(deb!==0&&!(prof>0))return;
+      bores.push({nom:(p[0]||'').trim(),lat,lon,prof:prof>0?prof:0,debit:deb});n++;});
+    saveBores();drawBores();render();$('#status').textContent=n+' forage(s) importé(s).';
+  };
+}
+
+/* ---------- Commandes ---------- */
+function goCoord(){
+  const m=$('#coord').value.match(/(-?\d+(?:[.,]\d+)?)\s*[,; ]\s*(-?\d+(?:[.,]\d+)?)/);
+  if(!m){$('#status').innerHTML='<span class="err">Format attendu : 34.67, 3.26</span>';return;}
+  const lat=parseFloat(m[1].replace(',','.')),lon=parseFloat(m[2].replace(',','.'));
+  map.setView([lat,lon],13);analyse(lat,lon);
+}
+$('#go').onclick=goCoord;
+$('#coord').addEventListener('keydown',e=>{if(e.key==='Enter')goCoord();});
+$('#loc').onclick=()=>{
+  if(!navigator.geolocation){$('#status').innerHTML='<span class="err">Position indisponible sur cet appareil.</span>';return;}
+  navigator.geolocation.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],13);analyse(p.coords.latitude,p.coords.longitude);},
+    ()=>{$('#status').innerHTML='<span class="err">Position refusée. Saisissez les coordonnées à la main.</span>';},{enableHighAccuracy:true,timeout:15000});
+};
+$('#recentre').onclick=()=>{if(!S.pt)return;ZONE.lat=S.pt.lat;ZONE.lon=S.pt.lon;zone.setLatLng([ZONE.lat,ZONE.lon]);};
+
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+drawBores();
+analyse(ZONE.lat,ZONE.lon);
+</script>
+</body>
+</html>
